@@ -52,6 +52,10 @@
             </form>
             
             <div class="mt-6 text-center">
+                <button type="button" onclick="testConnection()" 
+                        class="mb-4 text-sm text-blue-600 hover:text-blue-800 underline">
+                    🔧 Test Koneksi Google Sheets
+                </button>
                 <p class="text-xs text-gray-500">Login Credentials:</p>
                 <p class="text-xs text-gray-600">Pilot: PLT001 / pilot123</p>
                 <p class="text-xs text-gray-600">Crew: CRW001 / crew123</p>
@@ -285,45 +289,102 @@
 
     <script>
         // Configuration - Google Sheets Integration
+        // URL Apps Script yang sudah di-deploy sebagai Web App
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEjX9DazLDZu3IKHqInI5CIKpfjX74x8x_gDhIV6PFGx88s8U2c6IahQdiRgbTomGerg/exec';
-        const SPREADSHEET_ID = 'AKfycbx1LY1ZsBJvgDjlvNTuAblGae9A3qKY7y6Li3dNhMQw';
+        const SPREADSHEET_ID = '1amYY34QJoF50Bd8dHZ3DrKz3IzuOVNAB33iHJt3OCIc';
 
         let currentUser = null;
         let isLoggedIn = false;
 
+        // Test connection function
+        async function testConnection() {
+            const testBtn = event.target;
+            const originalText = testBtn.innerHTML;
+            
+            testBtn.innerHTML = '🔄 Testing...';
+            testBtn.disabled = true;
+            
+            try {
+                console.log('Testing connection to:', APPS_SCRIPT_URL);
+                
+                const result = await apiCall('test');
+                
+                if (result.success) {
+                    alert('✅ Koneksi berhasil!\n\nGoogle Sheets terhubung dengan baik.');
+                } else {
+                    alert('❌ Koneksi gagal!\n\n' + result.message + '\n\nSilakan periksa:\n1. URL Apps Script\n2. Deployment settings\n3. Permissions');
+                }
+            } catch (error) {
+                alert('❌ Error testing connection:\n\n' + error.message);
+            } finally {
+                testBtn.innerHTML = originalText;
+                testBtn.disabled = false;
+            }
+        }
+
         // API Functions
         async function apiCall(action, data = {}) {
+            console.log('Attempting API call:', action, data);
+            
             try {
-                // Add timeout and better error handling
+                // Test connection first
+                if (!APPS_SCRIPT_URL.includes('script.google.com')) {
+                    throw new Error('Invalid Apps Script URL');
+                }
+                
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
+                const requestBody = JSON.stringify({ action, ...data });
+                console.log('Request body:', requestBody);
                 
                 const response = await fetch(APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ action, ...data }),
+                    body: requestBody,
                     signal: controller.signal,
-                    mode: 'cors' // Explicitly set CORS mode
+                    mode: 'cors',
+                    cache: 'no-cache'
                 });
                 
                 clearTimeout(timeoutId);
                 
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('Response error:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
                 
                 const result = await response.json();
+                console.log('API Response:', result);
                 return result;
+                
             } catch (error) {
-                console.error('API Error:', error);
+                console.error('API Error Details:', error);
                 
                 if (error.name === 'AbortError') {
-                    return { success: false, message: 'Request timeout - silakan coba lagi' };
+                    return { 
+                        success: false, 
+                        message: 'Koneksi timeout. Periksa koneksi internet Anda.' 
+                    };
                 }
                 
-                return { success: false, message: 'Koneksi ke Google Sheets gagal. Pastikan Apps Script sudah di-deploy dengan benar.' };
+                if (error.message.includes('Failed to fetch')) {
+                    return { 
+                        success: false, 
+                        message: 'Tidak dapat terhubung ke server. Pastikan:\n1. Apps Script sudah di-deploy sebagai Web App\n2. Akses diatur ke "Anyone"\n3. URL Apps Script benar' 
+                    };
+                }
+                
+                return { 
+                    success: false, 
+                    message: `Error: ${error.message}\n\nPastikan Apps Script sudah dikonfigurasi dengan benar.` 
+                };
             }
         }
 
@@ -742,5 +803,5 @@
             showTab('history');
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'978163e50647f8cc',t:'MTc1NjY5NDI5My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97817582c08c1dad',t:'MTc1NjY5NTAxNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
