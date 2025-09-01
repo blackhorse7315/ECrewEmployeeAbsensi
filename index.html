@@ -595,7 +595,7 @@
                             <input type="file" id="newsImageInput" accept="image/*" class="hidden" onchange="previewNewsImage(event)">
                             <img id="newsImagePreview" class="hidden w-full max-w-sm mx-auto rounded-lg mb-4">
                             <div id="newsImageControls">
-                                <button type="button" onclick="document.getElementById('newsImageInput').click()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                                <button type="button" onclick="document.getElementById('newsImageInput').click()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 mb-2">
                                     <i class="fas fa-image mr-2"></i>Pilih Foto
                                 </button>
                                 <p class="text-sm text-gray-500 mt-2">Format: JPG, PNG (Max 5MB)</p>
@@ -1153,7 +1153,7 @@
                                             <button type="button" onclick="document.getElementById('logoUpload').click()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 mb-2">
                                                 <i class="fas fa-upload mr-2"></i>Pilih Logo
                                             </button>
-                                            <p class="text-sm text-gray-500">Format: PNG, JPG, SVG (Max 2MB)</p>
+                                            <p class="text-sm text-gray-500 mt-2">Format: PNG, JPG, SVG (Max 2MB)</p>
                                             <p class="text-xs text-gray-400 mt-1">Rekomendasi: 64x64px atau rasio 1:1</p>
                                         </div>
                                     </div>
@@ -1280,37 +1280,12 @@
         </div>
     </div>
 
-    <script type="module">
-        // Import Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, addDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script>
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw5dAW1_fGmZy61GNPWLZk5oGtJj2uaAay_B4A1aIQ4544Rv8fM_8EyDUYqc9mQp-cWPw/exec';
 
-        // Firebase configuration provided by the user
-        const firebaseConfig = {
-            apiKey: "AIzaSyDW5YHWavE395EzNN6bzjd6-OZ79sNkKI8",
-            authDomain: "ecrew-absensi-app-f4d3a.firebaseapp.com",
-            projectId: "ecrew-absensi-app-f4d3a",
-            storageBucket: "ecrew-absensi-app-f4d3a.firebasestorage.app",
-            messagingSenderId: "166074963694",
-            appId: "1:166074963694:web:00685430b7d559c88945ff"
-        };
-        const appId = firebaseConfig.projectId;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Firebase Service Instances
-        let app, db, auth;
         let currentUser = null;
-        let currentUserId = null;
-        let userProfileRef = null;
-        let attendanceRef = null;
-        let newsRef = null;
-        let brandingRef = null;
-        let employeesRef = null;
-        let settingsRef = null;
         let isAdmin = false;
-
-        let userAttendanceHistory = [];
+        let attendanceData = [];
         let newsData = [];
         let allEmployees = [];
         let appSettings = {};
@@ -1350,202 +1325,119 @@
             modal.style.display = 'flex';
         }
 
-        // Firebase Initialization and Authentication
-        async function initializeFirebase() {
+        // --- Fetch Data from Google Apps Script ---
+        async function fetchDataFromSheet(sheetName) {
             try {
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.error("Firebase config is empty. Cannot initialize app.");
-                    return;
+                const response = await fetch(`${WEB_APP_URL}?sheet=${sheetName}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                showModal('Error', `Gagal mengambil data dari Google Sheet (${sheetName}).`);
+                return [];
+            }
+        }
 
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        currentUserId = user.uid;
-                        if (initialAuthToken) {
-                            try {
-                                // Sign in with custom token for Canvas
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } catch (error) {
-                                console.error("Error signing in with custom token:", error);
-                            }
-                        }
-                        await handleUserLogin(user);
-                    } else {
-                        // Sign in anonymously if not authenticated by Canvas
-                        if (!initialAuthToken) {
-                            await signInAnonymously(auth);
-                        }
-                        console.log("User signed out or not authenticated. Login page is shown.");
-                    }
+        // --- Data Submission to Google Apps Script ---
+        async function postDataToSheet(sheetName, action, payload) {
+            try {
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sheet: sheetName, action: action, data: payload })
                 });
-
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                showModal('Error', 'Gagal menginisialisasi Firebase. Periksa koneksi atau konfigurasi.');
-            }
-        }
-
-        async function handleUserLogin(user) {
-            try {
-                const docRef = doc(db, 'employees', user.email);
-                const docSnap = await getDoc(docRef);
-                const employeeData = docSnap.exists() ? docSnap.data() : null;
-
-                if (employeeData && employeeData.role === 'admin') {
-                    currentUser = { name: employeeData.name, role: 'admin', email: employeeData.email, uid: user.uid };
-                    isAdmin = true;
-                    showDashboard('admin');
-                    setupAdminListeners();
-                } else if (employeeData) {
-                    currentUser = {
-                        name: employeeData.name,
-                        role: employeeData.role,
-                        email: employeeData.email,
-                        division: employeeData.division,
-                        position: employeeData.position,
-                        uid: user.uid,
-                        profilePhoto: employeeData.profilePhoto || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%236B7280\'%3E%3Cpath d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/%3E%3C/svg%3E',
-                    };
-                    isAdmin = false;
-                    showDashboard('user');
-                    setupUserListeners();
-                } else {
-                    console.error("Employee not found in database:", user.email);
-                    showModal('Login Gagal', 'Akun tidak ditemukan atau tidak memiliki akses.');
-                    await signOut(auth);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            } catch (e) {
-                console.error("Error handling user login:", e);
-                showModal('Error', 'Terjadi kesalahan saat otentikasi. Silakan coba lagi.');
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error("Error posting data:", error);
+                showModal('Error', `Gagal menyimpan data ke Google Sheet (${sheetName}).`);
+                return { success: false, error: error.message };
             }
         }
 
-        // Firebase Listeners
-        function setupUserListeners() {
-            if (!currentUserId) return;
-            const userAttendancePath = `/artifacts/${appId}/users/${currentUserId}/attendance`;
-            attendanceRef = collection(db, userAttendancePath);
+        // --- Main App Logic ---
+        async function loadInitialData() {
+            newsData = await fetchDataFromSheet('news');
+            const brandingArray = await fetchDataFromSheet('branding');
+            appSettings = brandingArray.length > 0 ? brandingArray[0] : {};
+            const settingsArray = await fetchDataFromSheet('settings');
+            systemSettings = settingsArray.length > 0 ? settingsArray[0] : {};
+            allEmployees = await fetchDataFromSheet('employees');
 
-            onSnapshot(attendanceRef, (snapshot) => {
-                userAttendanceHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (currentUser) {
+                const userAttendance = attendanceData.filter(rec => rec.employeeEmail === currentUser.email);
                 const today = new Date().toISOString().split('T')[0];
-                const todayRecord = userAttendanceHistory.find(rec => rec.date === today);
-
+                const todayRecord = userAttendance.find(rec => rec.date === today);
+                
                 if (todayRecord) {
                     clockInDocId = todayRecord.id;
-                    if (todayRecord.clockOut) {
-                        clockedIn = false;
-                        document.getElementById('clockInBtn').disabled = true;
-                        document.getElementById('clockOutBtn').disabled = true;
-                        document.getElementById('clockOutBtn').classList.add('opacity-50');
-                        showAttendanceSummary(todayRecord);
-                    } else {
-                        clockedIn = true;
-                        document.getElementById('clockInBtn').disabled = true;
-                        document.getElementById('clockOutBtn').disabled = false;
-                        document.getElementById('clockOutBtn').classList.remove('opacity-50');
-                        showAttendanceSummary(todayRecord);
-                    }
-                } else {
-                    clockedIn = false;
-                    document.getElementById('clockInBtn').disabled = false;
-                    document.getElementById('clockOutBtn').disabled = true;
-                    document.getElementById('clockOutBtn').classList.add('opacity-50');
-                    document.getElementById('attendanceSummary').classList.add('hidden');
                 }
-                updateStats();
-                renderAttendanceHistory();
-            }, (error) => {
-                console.error("Error listening to user attendance:", error);
-            });
-
-            onSnapshot(doc(db, 'employees', currentUser.email), (docSnap) => {
-                if (docSnap.exists()) {
-                    const employeeData = docSnap.data();
-                    currentUser = {
-                        ...currentUser,
-                        name: employeeData.name,
-                        profilePhoto: employeeData.profilePhoto || currentUser.profilePhoto
-                    };
-                    document.getElementById('userName').textContent = currentUser.name;
-                    document.getElementById('userProfilePhoto').src = currentUser.profilePhoto;
-                }
-            }, (error) => {
-                console.error("Error listening to user profile:", error);
-            });
-
-            setupGlobalListeners();
+            }
         }
 
-        function setupAdminListeners() {
-            const adminId = auth.currentUser?.uid;
-            if (!adminId) return;
-
-            const allAttendancePath = `/artifacts/${appId}/public/data/all_attendance`;
-            const employeesPath = `/artifacts/${appId}/public/data/employees`;
-            attendanceRef = collection(db, allAttendancePath);
-            employeesRef = collection(db, employeesPath);
-
-            onSnapshot(attendanceRef, (snapshot) => {
-                userAttendanceHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                loadAttendanceHistory();
-                updateAdminStats();
-            }, (error) => {
-                console.error("Error listening to admin attendance:", error);
-            });
-
-            onSnapshot(employeesRef, (snapshot) => {
-                allEmployees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                loadEmployeeTable();
-                updateAdminStats();
-            }, (error) => {
-                console.error("Error listening to employees:", error);
-            });
-
-            setupGlobalListeners();
-        }
-
-        function setupGlobalListeners() {
-            const newsPath = `/artifacts/${appId}/public/data/news`;
-            newsRef = collection(db, newsPath);
-            onSnapshot(newsRef, (snapshot) => {
-                newsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                loadNews();
+        function refreshData() {
+            loadInitialData().then(() => {
+                updateTime();
                 updateNewsTicker();
-                loadNewsTable();
-            }, (error) => {
-                console.error("Error listening to news:", error);
-            });
-
-            const brandingPath = `/artifacts/${appId}/public/data/branding`;
-            brandingRef = doc(db, brandingPath, 'settings');
-            onSnapshot(brandingRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    appSettings = docSnap.data();
+                if (isAdmin) {
+                    updateAdminStats();
+                    loadNewsTable();
+                    loadEmployeeTable();
+                    loadAttendanceHistory();
+                } else {
+                    updateStats();
+                    renderAttendanceHistory();
                 }
-                updateLoginBranding();
-                updateBrandingPreview();
-            }, (error) => {
-                console.error("Error listening to branding settings:", error);
-            });
-
-            const settingsPath = `/artifacts/${appId}/public/data/settings`;
-            settingsRef = doc(db, settingsPath, 'work_hours');
-            onSnapshot(settingsRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    systemSettings = docSnap.data();
-                }
-            }, (error) => {
-                console.error("Error listening to system settings:", error);
             });
         }
+        
+        // Polling untuk refresh data
+        setInterval(refreshData, 30000); // Refresh setiap 30 detik
 
-        // Clock In/Out logic
-        async function submitClockIn() {
+        // --- Login & Authentication ---
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            const response = await postDataToSheet('login', 'login', { email, password });
+            
+            if (response.success) {
+                currentUser = response.user;
+                if (currentUser.role === 'admin') {
+                    isAdmin = true;
+                    showDashboard('admin');
+                } else {
+                    isAdmin = false;
+                    showDashboard('user');
+                }
+                refreshData();
+            } else {
+                document.getElementById('loginError').textContent = response.message || "Email atau password salah.";
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        async function logout() {
+            currentUser = null;
+            isAdmin = false;
+            attendanceData = [];
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('userDashboard').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('loginForm').reset();
+            window.location.reload();
+        }
+
+        // --- User Dashboard Logic ---
+        async function submitClockIn(e) {
+            e.preventDefault();
             if (!currentUser) return;
             const now = new Date();
 
@@ -1577,41 +1469,41 @@
                     return;
                 }
             }
+            
+            const newRecord = {
+                id: Date.now(), // Use timestamp as unique ID
+                date: now.toISOString().split('T')[0],
+                employeeName: currentUser.name,
+                employeeEmail: currentUser.email,
+                employeeDivision: currentUser.division,
+                employeePosition: currentUser.position,
+                clockIn: JSON.stringify({
+                    time: now.toISOString(),
+                    dutyAs: document.getElementById('dutyAs').value,
+                    workType: document.getElementById('workType').value,
+                    location: locationIn,
+                    photo: document.getElementById('capturedPhoto').src,
+                    withinRadius: withinRadius,
+                    outsideReason: withinRadius ? null : document.getElementById('outsideReasonTextIn').value,
+                    isLate: isLate,
+                    lateReason: isLate ? document.getElementById('lateReasonText').value : null
+                }),
+                clockOut: null,
+                adminNotes: null,
+                lastModified: new Date().toISOString(),
+                modifiedBy: null
+            };
 
-            try {
-                const newRecord = {
-                    date: now.toISOString().split('T')[0],
-                    employeeName: currentUser.name,
-                    employeeEmail: currentUser.email,
-                    employeeDivision: currentUser.division,
-                    employeePosition: currentUser.position,
-                    clockIn: {
-                        time: now.toISOString(),
-                        dutyAs: document.getElementById('dutyAs').value,
-                        workType: document.getElementById('workType').value,
-                        location: locationIn,
-                        photo: document.getElementById('capturedPhoto').src,
-                        withinRadius: withinRadius,
-                        outsideReason: withinRadius ? null : document.getElementById('outsideReasonTextIn').value,
-                        isLate: isLate,
-                        lateReason: isLate ? document.getElementById('lateReasonText').value : null
-                    },
-                    clockOut: null
-                };
-
-                const docRef = await addDoc(collection(db, `/artifacts/${appId}/users/${currentUserId}/attendance`), newRecord);
-                const publicDocRef = doc(db, `/artifacts/${appId}/public/data/all_attendance`, docRef.id);
-                await setDoc(publicDocRef, newRecord);
-
+            const result = await postDataToSheet('attendance', 'add', newRecord);
+            if (result.success) {
                 hideClockInForm();
                 showModal('Berhasil!', 'Absen masuk berhasil!');
-            } catch (e) {
-                console.error("Error submitting clock in:", e);
-                showModal('Error', 'Gagal menyimpan data absensi.');
+                refreshData();
             }
         }
 
-        async function submitClockOut() {
+        async function submitClockOut(e) {
+            e.preventDefault();
             if (!currentUser || !clockInDocId) return;
             const now = new Date();
 
@@ -1631,37 +1523,47 @@
                 }
             }
 
-            try {
-                const updates = {
-                    clockOut: {
-                        time: now.toISOString(),
-                        location: locationOut,
-                        withinRadius: withinRadius,
-                        outsideReason: withinRadius ? null : document.getElementById('outsideReasonTextOut').value,
-                        workReport: workReport,
-                        workPhoto: document.getElementById('workPhotoPreview').src || null
-                    }
-                };
+            const existingRecord = attendanceData.find(rec => rec.id == clockInDocId);
+            if (!existingRecord) {
+                showModal('Error', 'Catatan absensi tidak ditemukan.');
+                return;
+            }
+            
+            const updatedRecord = {
+                id: existingRecord.id,
+                employeeName: existingRecord.employeeName,
+                employeeEmail: existingRecord.employeeEmail,
+                employeeDivision: existingRecord.employeeDivision,
+                employeePosition: existingRecord.employeePosition,
+                date: existingRecord.date,
+                clockIn: existingRecord.clockIn,
+                clockOut: JSON.stringify({
+                    time: now.toISOString(),
+                    location: locationOut,
+                    withinRadius: withinRadius,
+                    outsideReason: withinRadius ? null : document.getElementById('outsideReasonTextOut').value,
+                    workReport: workReport,
+                    workPhoto: document.getElementById('workPhotoPreview').src || null
+                }),
+                adminNotes: existingRecord.adminNotes,
+                lastModified: new Date().toISOString(),
+                modifiedBy: currentUser.email
+            };
 
-                const userDocRef = doc(db, `/artifacts/${appId}/users/${currentUserId}/attendance`, clockInDocId);
-                const publicDocRef = doc(db, `/artifacts/${appId}/public/data/all_attendance`, clockInDocId);
-
-                await updateDoc(userDocRef, updates);
-                await updateDoc(publicDocRef, updates);
-
+            const result = await postDataToSheet('attendance', 'save', updatedRecord);
+            if (result.success) {
                 hideClockOutForm();
                 showModal('Berhasil!', 'Absen pulang berhasil!');
-            } catch (e) {
-                console.error("Error submitting clock out:", e);
-                showModal('Error', 'Gagal menyimpan data absensi pulang.');
+                refreshData();
             }
         }
 
-        // Admin functions
+        // --- Admin Dashboard Logic ---
         async function saveNews(e) {
             e.preventDefault();
             const newsId = document.getElementById('newsId').value;
-            const newsData = {
+            const newsPayload = {
+                id: newsId || Date.now(),
                 title: document.getElementById('newsTitle').value,
                 category: document.getElementById('newsCategory').value,
                 summary: document.getElementById('newsSummary').value,
@@ -1669,70 +1571,24 @@
                 author: document.getElementById('newsAuthor').value || 'Admin',
                 isActive: document.getElementById('newsActive').checked,
                 isNotified: document.getElementById('newsNotify').checked,
-                image: document.getElementById('newsImagePreview').src || null
+                image: document.getElementById('newsImagePreview').src || null,
+                date: newsId ? newsData.find(n => n.id == newsId)?.date : new Date().toISOString().split('T')[0]
             };
 
-            try {
-                if (newsId) {
-                    const docRef = doc(newsRef, newsId);
-                    await updateDoc(docRef, newsData);
-                    showModal('Berhasil!', 'Berita berhasil diupdate!');
-                } else {
-                    await addDoc(newsRef, { ...newsData, date: new Date().toISOString() });
-                    showModal('Berhasil!', 'Berita berhasil ditambahkan!');
-                }
+            let result;
+            if (newsId) {
+                result = await postDataToSheet('news', 'save', newsPayload);
+            } else {
+                result = await postDataToSheet('news', 'add', newsPayload);
+            }
+
+            if (result.success) {
+                showModal('Berhasil!', newsId ? 'Berita berhasil diupdate!' : 'Berita berhasil ditambahkan!');
                 hideNewsModal();
-            } catch (e) {
-                console.error("Error saving news:", e);
-                showModal('Error', 'Gagal menyimpan berita.');
+                refreshData();
             }
         }
-
-        async function editNews(newsId) {
-            const news = newsData.find(n => n.id === newsId);
-            if (!news) return;
-            document.getElementById('newsModalTitle').textContent = 'Edit Berita';
-            document.getElementById('newsId').value = news.id;
-            document.getElementById('newsTitle').value = news.title;
-            document.getElementById('newsCategory').value = news.category;
-            document.getElementById('newsSummary').value = news.summary;
-            document.getElementById('newsContent').value = news.content;
-            document.getElementById('newsAuthor').value = news.author;
-            document.getElementById('newsActive').checked = news.isActive;
-            document.getElementById('newsNotify').checked = news.isNotified;
-            document.getElementById('newsImagePreview').src = news.image || '';
-            document.getElementById('newsImagePreview').classList.toggle('hidden', !news.image);
-            document.getElementById('newsModal').classList.remove('hidden');
-        }
-
-        async function toggleNewsStatus(newsId) {
-            const docRef = doc(newsRef, newsId);
-            const news = newsData.find(n => n.id === newsId);
-            if (news) {
-                await updateDoc(docRef, { isActive: !news.isActive });
-            }
-        }
-
-        async function toggleNewsNotification(newsId) {
-            const docRef = doc(newsRef, newsId);
-            const news = newsData.find(n => n.id === newsId);
-            if (news) {
-                await updateDoc(docRef, { isNotified: !news.isNotified });
-            }
-        }
-
-        async function deleteNews(newsId) {
-            showModal('Konfirmasi', 'Apakah Anda yakin ingin menghapus berita ini?', true, async () => {
-                try {
-                    await deleteDoc(doc(newsRef, newsId));
-                    showModal('Berhasil!', 'Berita berhasil dihapus.');
-                } catch (e) {
-                    console.error("Error deleting news:", e);
-                    showModal('Error', 'Gagal menghapus berita.');
-                }
-            });
-        }
-
+        
         async function saveBranding() {
             const title = document.getElementById('appTitle').value.trim();
             const subtitle = document.getElementById('appSubtitle').value.trim();
@@ -1748,12 +1604,10 @@
                 logo: tempLogo || 'default',
             };
 
-            try {
-                await setDoc(brandingRef, newSettings);
+            const result = await postDataToSheet('branding', 'save', newSettings);
+            if (result.success) {
                 showModal('Berhasil!', 'Pengaturan branding berhasil disimpan!');
-            } catch (e) {
-                console.error("Error saving branding:", e);
-                showModal('Error', 'Gagal menyimpan pengaturan branding.');
+                refreshData();
             }
         }
 
@@ -1764,17 +1618,25 @@
                 lateTolerance: parseInt(document.getElementById('lateTolerance').value, 10)
             };
 
-            try {
-                await setDoc(settingsRef, newSettings);
+            const result = await postDataToSheet('settings', 'save', newSettings);
+            if (result.success) {
                 showModal('Berhasil!', 'Pengaturan sistem berhasil disimpan!');
-            } catch (e) {
-                console.error("Error saving settings:", e);
-                showModal('Error', 'Gagal menyimpan pengaturan sistem.');
+                refreshData();
             }
         }
 
+        async function deleteNews(newsId) {
+            showModal('Konfirmasi', 'Apakah Anda yakin ingin menghapus berita ini?', true, async () => {
+                const result = await postDataToSheet('news', 'delete', { id: newsId });
+                if (result.success) {
+                    showModal('Berhasil!', 'Berita berhasil dihapus.');
+                    refreshData();
+                }
+            });
+        }
+        
         async function editAttendanceRecord(attendanceId) {
-            const record = userAttendanceHistory.find(r => r.id === attendanceId);
+            const record = attendanceData.find(r => r.id == attendanceId);
             if (!record) return;
             document.getElementById('editAttendanceId').value = record.id;
             document.getElementById('editEmployeeName').value = record.employeeName;
@@ -1782,28 +1644,32 @@
             document.getElementById('editEmployeeDivision').value = record.employeeDivision;
             document.getElementById('editEmployeePosition').value = record.employeePosition;
 
-            if (record.clockIn) {
-                const clockInTime = new Date(record.clockIn.time);
+            // Parse JSON strings
+            const clockIn = record.clockIn ? JSON.parse(record.clockIn) : {};
+            const clockOut = record.clockOut ? JSON.parse(record.clockOut) : null;
+
+            if (clockIn.time) {
+                const clockInTime = new Date(clockIn.time);
                 document.getElementById('editClockInTime').value = clockInTime.toISOString().slice(0, 16);
-                document.getElementById('editDutyAs').value = record.clockIn.dutyAs || '';
-                document.getElementById('editWorkType').value = record.clockIn.workType || '';
-                document.getElementById('editLocationIn').value = `${record.clockIn.location.lat}, ${record.clockIn.location.lng}`;
-                document.getElementById('editRadiusStatusIn').value = record.clockIn.withinRadius.toString();
-                document.getElementById('editOutsideReasonIn').value = record.clockIn.outsideReason || '';
-                document.getElementById('editLateStatus').value = record.clockIn.isLate.toString();
-                document.getElementById('editLateReason').value = record.clockIn.lateReason || '';
-                document.getElementById('editPhotoIn').src = record.clockIn.photo || '';
+                document.getElementById('editDutyAs').value = clockIn.dutyAs || '';
+                document.getElementById('editWorkType').value = clockIn.workType || '';
+                document.getElementById('editLocationIn').value = `${clockIn.location?.lat}, ${clockIn.location?.lng}`;
+                document.getElementById('editRadiusStatusIn').value = clockIn.withinRadius.toString();
+                document.getElementById('editOutsideReasonIn').value = clockIn.outsideReason || '';
+                document.getElementById('editLateStatus').value = clockIn.isLate.toString();
+                document.getElementById('editLateReason').value = clockIn.lateReason || '';
+                document.getElementById('editPhotoIn').src = clockIn.photo || '';
             }
 
-            if (record.clockOut) {
-                const clockOutTime = new Date(record.clockOut.time);
+            if (clockOut) {
+                const clockOutTime = new Date(clockOut.time);
                 document.getElementById('editClockOutTime').value = clockOutTime.toISOString().slice(0, 16);
-                document.getElementById('editLocationOut').value = `${record.clockOut.location.lat}, ${record.clockOut.location.lng}`;
-                document.getElementById('editRadiusStatusOut').value = record.clockOut.withinRadius.toString();
-                document.getElementById('editOutsideReasonOut').value = record.clockOut.outsideReason || '';
-                document.getElementById('editWorkReport').value = record.clockOut.workReport || '';
-                if (record.clockOut.workPhoto) {
-                    document.getElementById('editPhotoOut').src = record.clockOut.workPhoto;
+                document.getElementById('editLocationOut').value = `${clockOut.location?.lat}, ${clockOut.location?.lng}`;
+                document.getElementById('editRadiusStatusOut').value = clockOut.withinRadius.toString();
+                document.getElementById('editOutsideReasonOut').value = clockOut.outsideReason || '';
+                document.getElementById('editWorkReport').value = clockOut.workReport || '';
+                if (clockOut.workPhoto) {
+                    document.getElementById('editPhotoOut').src = clockOut.workPhoto;
                     document.getElementById('editPhotoOut').classList.remove('hidden');
                     document.getElementById('editNoPhotoOut').classList.add('hidden');
                 } else {
@@ -1814,7 +1680,6 @@
             } else {
                 document.getElementById('editClockOutSection').classList.add('hidden');
             }
-
             document.getElementById('editAdminNotes').value = record.adminNotes || '';
             document.getElementById('adminAttendanceEditModal').classList.remove('hidden');
             setupEditFormConditionals();
@@ -1823,280 +1688,60 @@
         async function saveAttendanceEdit(e) {
             e.preventDefault();
             const attendanceId = document.getElementById('editAttendanceId').value;
-            try {
-                const docRef = doc(attendanceRef, attendanceId);
-                const clockInTime = new Date(document.getElementById('editClockInTime').value);
-                const locationInParts = document.getElementById('editLocationIn').value.split(',');
+            if (!attendanceId) return;
+            
+            const existingRecord = attendanceData.find(r => r.id == attendanceId);
+            const clockIn = existingRecord.clockIn ? JSON.parse(existingRecord.clockIn) : {};
+            const clockOut = existingRecord.clockOut ? JSON.parse(existingRecord.clockOut) : null;
+            
+            const locationInParts = document.getElementById('editLocationIn').value.split(',');
+            const locationOutParts = document.getElementById('editLocationOut').value.split(',');
 
-                const updates = {
-                    'clockIn.time': clockInTime.toISOString(),
-                    'clockIn.dutyAs': document.getElementById('editDutyAs').value,
-                    'clockIn.workType': document.getElementById('editWorkType').value,
-                    'clockIn.location.lat': parseFloat(locationInParts[0].trim()),
-                    'clockIn.location.lng': parseFloat(locationInParts[1].trim()),
-                    'clockIn.withinRadius': document.getElementById('editRadiusStatusIn').value === 'true',
-                    'clockIn.outsideReason': document.getElementById('editOutsideReasonIn').value || null,
-                    'clockIn.isLate': document.getElementById('editLateStatus').value === 'true',
-                    'clockIn.lateReason': document.getElementById('editLateReason').value || null,
-                    adminNotes: document.getElementById('editAdminNotes').value || null,
-                    lastModified: new Date().toISOString(),
-                    modifiedBy: currentUser.name
-                };
+            const updatedRecord = {
+                ...existingRecord,
+                clockIn: JSON.stringify({
+                    ...clockIn,
+                    time: document.getElementById('editClockInTime').value,
+                    dutyAs: document.getElementById('editDutyAs').value,
+                    workType: document.getElementById('editWorkType').value,
+                    location: {lat: parseFloat(locationInParts[0].trim()), lng: parseFloat(locationInParts[1].trim())},
+                    withinRadius: document.getElementById('editRadiusStatusIn').value === 'true',
+                    outsideReason: document.getElementById('editOutsideReasonIn').value || null,
+                    isLate: document.getElementById('editLateStatus').value === 'true',
+                    lateReason: document.getElementById('editLateReason').value || null,
+                }),
+                clockOut: document.getElementById('editClockOutTime').value ? JSON.stringify({
+                    ...clockOut,
+                    time: document.getElementById('editClockOutTime').value,
+                    location: {lat: parseFloat(locationOutParts[0].trim()), lng: parseFloat(locationOutParts[1].trim())},
+                    withinRadius: document.getElementById('editRadiusStatusOut').value === 'true',
+                    outsideReason: document.getElementById('editOutsideReasonOut').value || null,
+                    workReport: document.getElementById('editWorkReport').value,
+                }) : null,
+                adminNotes: document.getElementById('editAdminNotes').value || null,
+                lastModified: new Date().toISOString(),
+                modifiedBy: currentUser.email
+            };
 
-                const clockOutTime = document.getElementById('editClockOutTime').value;
-                if (clockOutTime) {
-                    const locationOutParts = document.getElementById('editLocationOut').value.split(',');
-                    updates['clockOut.time'] = new Date(clockOutTime).toISOString();
-                    updates['clockOut.location.lat'] = parseFloat(locationOutParts[0].trim());
-                    updates['clockOut.location.lng'] = parseFloat(locationOutParts[1].trim());
-                    updates['clockOut.withinRadius'] = document.getElementById('editRadiusStatusOut').value === 'true';
-                    updates['clockOut.outsideReason'] = document.getElementById('editOutsideReasonOut').value || null;
-                    updates['clockOut.workReport'] = document.getElementById('editWorkReport').value;
-                }
-
-                await updateDoc(docRef, updates);
+            const result = await postDataToSheet('attendance', 'save', updatedRecord);
+            if (result.success) {
                 hideAdminAttendanceEdit();
                 showModal('Berhasil!', 'Data absensi berhasil diupdate!');
-            } catch (error) {
-                console.error('Error updating attendance:', error);
-                showModal('Error', 'Terjadi kesalahan saat menyimpan data. Periksa format input Anda.');
+                refreshData();
             }
         }
-
+        
         async function deleteAttendanceRecord(attendanceId) {
-            const record = userAttendanceHistory.find(r => r.id === attendanceId);
-            if (!record) return;
-            showModal('Konfirmasi', `Apakah Anda yakin ingin menghapus data absensi ${record.employeeName} pada ${new Date(record.date).toLocaleDateString('id-ID')}?`, true, async () => {
-                try {
-                    await deleteDoc(doc(attendanceRef, attendanceId));
+            showModal('Konfirmasi', `Apakah Anda yakin ingin menghapus data absensi ini?`, true, async () => {
+                const result = await postDataToSheet('attendance', 'delete', { id: attendanceId });
+                if (result.success) {
                     showModal('Berhasil!', 'Data absensi berhasil dihapus!');
-                } catch (e) {
-                    console.error("Error deleting attendance:", e);
-                    showModal('Error', 'Gagal menghapus data absensi.');
+                    refreshData();
                 }
             });
         }
-
-        // Helper functions
-        function checkIsLate(time) {
-            const workStartHour = systemSettings.workHourStart ? parseInt(systemSettings.workHourStart.split(':')[0], 10) : 8;
-            const workStartMinute = systemSettings.workHourStart ? parseInt(systemSettings.workHourStart.split(':')[1], 10) : 0;
-            const lateTolerance = systemSettings.lateTolerance || 15;
-
-            const clockInTime = new Date(time);
-            const lateTime = new Date();
-            lateTime.setHours(workStartHour, workStartMinute + lateTolerance, 0, 0);
-
-            return clockInTime > lateTime;
-        }
-        function checkWorkTimeStatus(time, workType) {
-            // Placeholder logic, can be expanded with real work hour settings
-            const workEndHour = systemSettings.workHourEnd ? parseInt(systemSettings.workHourEnd.split(':')[0], 10) : 17;
-            const workEndMinute = systemSettings.workHourEnd ? parseInt(systemSettings.workHourEnd.split(':')[1], 10) : 0;
-            const clockOutTime = new Date(time);
-            const workEndTime = new Date();
-            workEndTime.setHours(workEndHour, workEndMinute, 0, 0);
-
-            if (clockOutTime < workEndTime) return 'Pulang Sebelum Waktunya';
-            if (clockOutTime > workEndTime) return 'Waktu Kerja Melebihi';
-            return 'Tepat Waktu';
-        }
-
-        // UI rendering functions
-        function showDashboard(role) {
-            document.getElementById('loginPage').classList.add('hidden');
-            if (role === 'admin') {
-                document.getElementById('adminDashboard').classList.remove('hidden');
-                document.getElementById('userName').textContent = "Administrator";
-                showAdminTab('news');
-            } else {
-                document.getElementById('userDashboard').classList.remove('hidden');
-                document.getElementById('userName').textContent = currentUser.name;
-                document.getElementById('userProfilePhoto').src = currentUser.profilePhoto;
-                showTab('history');
-            }
-        }
-
-        function updateTime() {
-            const now = new Date();
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('id-ID');
-            document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        }
-
-        function updateStats() {
-            const today = new Date().toISOString().split('T')[0];
-            const presentThisMonth = userAttendanceHistory.filter(rec => new Date(rec.date).getMonth() === new Date().getMonth() && rec.clockIn).length;
-            const lateThisMonth = userAttendanceHistory.filter(rec => new Date(rec.date).getMonth() === new Date().getMonth() && rec.clockIn?.isLate).length;
-            const totalHoursThisMonth = userAttendanceHistory.reduce((sum, rec) => {
-                if (rec.clockIn && rec.clockOut) {
-                    const diffMs = new Date(rec.clockOut.time) - new Date(rec.clockIn.time);
-                    return sum + (diffMs / (1000 * 60 * 60));
-                }
-                return sum;
-            }, 0);
-
-            document.getElementById('monthlyAttendance').textContent = presentThisMonth;
-            document.getElementById('monthlyLate').textContent = lateThisMonth;
-            document.getElementById('monthlyWorkHours').textContent = `${Math.floor(totalHoursThisMonth)}h ${Math.round((totalHoursThisMonth % 1) * 60)}m`;
-        }
-
-        function renderAttendanceHistory() {
-            const tbody = document.getElementById('attendanceHistory');
-            tbody.innerHTML = '';
-            if (userAttendanceHistory.length === 0) {
-                tbody.innerHTML = `<tr id="noDataRow"><td colspan="4" class="py-8 px-4 text-center text-gray-500"><i class="fas fa-calendar-times text-4xl mb-2"></i><p>Belum ada data absensi</p></td></tr>`;
-                return;
-            }
-
-            const sortedHistory = [...userAttendanceHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-            sortedHistory.forEach(record => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-gray-100 hover:bg-gray-50 cursor-pointer';
-                row.onclick = () => showAttendanceDetail(record);
-
-                const timeIn = record.clockIn ? new Date(record.clockIn.time).toLocaleTimeString('id-ID') : '-';
-                const timeOut = record.clockOut ? new Date(record.clockOut.time).toLocaleTimeString('id-ID') : '-';
-                const isLate = record.clockIn?.isLate;
-                const statusClass = record.clockOut ? 'bg-green-100 text-green-800' : (isLate ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800');
-                const statusText = record.clockOut ? 'Hadir' : (isLate ? 'Terlambat' : 'Clock In');
-
-                row.innerHTML = `
-                    <td class="py-3 px-4">${new Date(record.date).toLocaleDateString('id-ID')}</td>
-                    <td class="py-3 px-4">${timeIn}</td>
-                    <td class="py-3 px-4">${timeOut}</td>
-                    <td class="py-3 px-4"><span class="${statusClass} px-2 py-1 rounded-full text-sm">${statusText}</span></td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        function showAttendanceSummary(record) {
-            const summary = document.getElementById('attendanceSummary');
-            if (!record) { summary.classList.add('hidden'); return; }
-
-            const clockInData = record.clockIn;
-            const clockOutData = record.clockOut;
-
-            document.getElementById('attendanceStatusText').textContent = clockOutData ? 'Pulang' : 'On Working';
-            document.getElementById('attendanceStatusText').className = `font-medium text-lg ${clockOutData ? 'text-blue-600' : 'text-green-600'}`;
-            document.getElementById('clockInTime').textContent = new Date(clockInData.time).toLocaleString('id-ID');
-
-            const isLate = clockInData.isLate;
-            document.getElementById('clockInStatus').textContent = isLate ? 'Anda Terlambat Absen' : 'Terima Kasih Anda Telah Absen Tepat Waktu';
-            document.getElementById('clockInStatus').className = `font-medium ${isLate ? 'text-red-600' : 'text-green-600'}`;
-
-            if (clockOutData) {
-                document.getElementById('clockOutTimeDiv').classList.remove('hidden');
-                document.getElementById('clockOutTime').textContent = new Date(clockOutData.time).toLocaleString('id-ID');
-                document.getElementById('clockOutStatusDiv').classList.remove('hidden');
-                const statusText = checkWorkTimeStatus(clockOutData.time, clockInData.workType);
-                const statusClass = statusText.includes('Pulang') ? 'text-yellow-600' : (statusText.includes('Melebihi') ? 'text-blue-600' : 'text-green-600');
-                document.getElementById('clockOutStatus').textContent = statusText;
-                document.getElementById('clockOutStatus').className = `font-medium ${statusClass}`;
-
-                const workTimeMs = new Date(clockOutData.time) - new Date(clockInData.time);
-                const workHours = Math.floor(workTimeMs / (1000 * 60 * 60));
-                const workMinutes = Math.floor((workTimeMs % (1000 * 60 * 60)) / (1000 * 60));
-                const workSeconds = Math.floor((workTimeMs % (1000 * 60)) / 1000);
-                document.getElementById('totalWorktime').textContent = `${workHours}h ${workMinutes}m ${workSeconds}s`;
-                document.getElementById('worktimeDiv').classList.remove('hidden');
-
-            } else {
-                document.getElementById('clockOutTimeDiv').classList.add('hidden');
-                document.getElementById('clockOutStatusDiv').classList.add('hidden');
-                document.getElementById('worktimeDiv').classList.add('hidden');
-            }
-
-            summary.classList.remove('hidden');
-        }
-
-        async function logout() {
-            try {
-                await signOut(auth);
-                window.location.reload(); // Hard reload to reset state
-            } catch (error) {
-                console.error("Error signing out:", error);
-                showModal('Error', 'Gagal logout. Silakan coba lagi.');
-            }
-        }
-
-        // Event listeners and initial setup
-        document.addEventListener('DOMContentLoaded', function() {
-            updateTime();
-            setInterval(updateTime, 1000);
-            document.getElementById('loginForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const email = document.getElementById('loginEmail').value;
-                const password = document.getElementById('loginPassword').value;
-
-                try {
-                    const q = query(collection(db, `employees`), where("email", "==", email), where("password", "==", password));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        const employeeData = querySnapshot.docs[0].data();
-                        const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                        console.log("Login successful with custom token.", userCredential.user.uid);
-                    } else {
-                        throw new Error("Invalid credentials");
-                    }
-                } catch (e) {
-                    console.error("Login failed:", e);
-                    document.getElementById('loginError').textContent = "Email atau password salah!";
-                    document.getElementById('loginError').classList.remove('hidden');
-                }
-            });
-
-            document.getElementById('profileForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (!currentUser || !userProfileRef) return;
-                try {
-                    const updates = {
-                        name: document.getElementById('profileName').value,
-                        phone: document.getElementById('profilePhone').value,
-                        department: document.getElementById('profileDepartment').value,
-                        profilePhoto: document.getElementById('profilePhotoPreview').src
-                    };
-                    await updateDoc(userProfileRef, updates);
-                    hideProfileModal();
-                    showModal('Berhasil!', 'Profile berhasil diupdate!');
-                } catch (e) {
-                    console.error("Error updating profile:", e);
-                    showModal('Error', 'Gagal menyimpan profile.');
-                }
-            });
-
-            document.getElementById('adminAttendanceEditForm').addEventListener('submit', saveAttendanceEdit);
-            document.getElementById('newsForm').addEventListener('submit', saveNews);
-            document.getElementById('brandingForm').addEventListener('submit', saveBranding);
-            document.getElementById('settingsForm').addEventListener('submit', saveSettings);
-
-            // Initial Firebase setup
-            initializeFirebase();
-        });
-
-        // Other functions (no major changes needed, just minor adjustments for Firebase data)
-        function calculateDistance(lat1, lng1, lat2, lng2) {
-            const R = 6371e3; // Earth's radius in meters
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2-lat1) * Math.PI/180;
-            const Δλ = (lng2-lng1) * Math.PI/180;
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-
-        function isWithinOfficeRadius(lat, lng) {
-            for (let office of officeLocations) {
-                const distance = calculateDistance(lat, lng, office.lat, office.lng);
-                if (distance <= radiusMeters) return true;
-            }
-            return false;
-        }
-
+        
+        // --- UI Rendering & Helper Functions ---
         function showClockInForm() {
             document.getElementById('clockInForm').classList.remove('hidden');
             document.getElementById('clockInBtn').disabled = true;
@@ -2195,7 +1840,7 @@
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     const { latitude, longitude } = position.coords;
-                    document.getElementById(`coords${type === 'in' ? 'In' : 'Out'}`).textContent = `{"lat": ${latitude}, "lng": ${longitude}}`;
+                    document.getElementById(`coords${type === 'in' ? 'In' : 'Out'}`).textContent = JSON.stringify({lat: latitude, lng: longitude});
                     displayLocationInfo(latitude, longitude, type);
                     button.innerHTML = '<i class="fas fa-map-marker-alt mr-2"></i>Lokasi Berhasil Didapat';
                     button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -2367,7 +2012,7 @@
             `).join('');
         }
         function showNewsDetail(newsId) {
-            const news = newsData.find(n => n.id === newsId);
+            const news = newsData.find(n => n.id == newsId);
             if (!news) return;
             const modal = document.getElementById('newsDetailModal');
             const title = document.getElementById('newsDetailTitle');
@@ -2388,10 +2033,7 @@
         function previewNewsImage(event) {
             const file = event.target.files[0];
             if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    showModal('Peringatan', 'Ukuran file terlalu besar. Maksimal 5MB.');
-                    return;
-                }
+                if (file.size > 5 * 1024 * 1024) { showModal('Peringatan', 'Ukuran file terlalu besar. Maksimal 5MB.'); return; }
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     document.getElementById('newsImagePreview').src = e.target.result;
@@ -2400,6 +2042,23 @@
                 reader.readAsDataURL(file);
             }
         }
+
+        async function toggleNewsStatus(newsId) {
+            const news = newsData.find(n => n.id == newsId);
+            if (news) {
+                const result = await postDataToSheet('news', 'save', { id: newsId, isActive: !news.isActive });
+                if (result.success) refreshData();
+            }
+        }
+        
+        async function toggleNewsNotification(newsId) {
+            const news = newsData.find(n => n.id == newsId);
+            if (news) {
+                const result = await postDataToSheet('news', 'save', { id: newsId, isNotified: !news.isNotified });
+                if (result.success) refreshData();
+            }
+        }
+
         function showAdminTab(tabName) {
             document.querySelectorAll('[id$="Tab"]').forEach(el => el.classList.add('hidden'));
             document.getElementById(tabName + 'Tab').classList.remove('hidden');
@@ -2417,37 +2076,56 @@
             document.querySelector(`[data-tab="${tabName}"]`).classList.remove('border-transparent', 'text-gray-500');
             document.querySelector(`[data-tab="${tabName}"]`).classList.add('border-purple-500', 'text-purple-600');
         }
+
         function setDefaultDateFilter() {
             const today = new Date();
             const dateFilter = document.getElementById('attendanceDateFilter');
             if (dateFilter) dateFilter.value = today.toISOString().split('T')[0];
         }
+
         function loadAttendanceHistory() {
             const tbody = document.getElementById('attendanceHistoryTableBody');
             if (!tbody) return;
             tbody.innerHTML = '';
-            if (userAttendanceHistory.length === 0) {
+            if (attendanceData.length === 0) {
                 tbody.innerHTML = `<tr id="noAttendanceDataRow"><td colspan="7" class="py-8 px-4 text-center text-gray-500"><i class="fas fa-calendar-times text-4xl mb-2"></i><p>Belum ada data absensi</p></td></tr>`;
                 return;
             }
-            const sortedData = [...userAttendanceHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+            const sortedData = [...attendanceData].sort((a, b) => new Date(b.date) - new Date(a.date));
             sortedData.forEach(record => tbody.appendChild(createAttendanceRow(record)));
-            updateFilterSummary(userAttendanceHistory.length, userAttendanceHistory.length);
+            updateFilterSummary(attendanceData.length, attendanceData.length);
         }
+
         function createAttendanceRow(record) {
             const row = document.createElement('tr');
             row.className = 'border-b border-gray-100 hover:bg-gray-50 cursor-pointer';
-            const clockInTime = record.clockIn ? new Date(record.clockIn.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
-            const clockOutTime = record.clockOut ? new Date(record.clockOut.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
-            let status = record.clockOut ? 'Hadir' : (record.clockIn.isLate ? 'Terlambat' : 'Clock In');
-            let statusClass = record.clockOut ? 'bg-green-100 text-green-800' : (record.clockIn.isLate ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800');
-            const locationStatus = (record.clockIn.withinRadius && (!record.clockOut || record.clockOut.withinRadius)) ? 'Dalam Radius' : 'Ada di Luar Radius';
-            const locationClass = (record.clockIn.withinRadius && (!record.clockOut || record.clockOut.withinRadius)) ? 'text-green-600' : 'text-yellow-600';
-            row.innerHTML = `<td class="py-3 px-4"><div class="font-medium text-gray-800">${record.employeeName}</div><div class="text-sm text-gray-500">${record.employeePosition}</div></td><td class="py-3 px-4">${new Date(record.date).toLocaleDateString('id-ID')}</td><td class="py-3 px-4">${clockInTime}</td><td class="py-3 px-4">${clockOutTime}</td><td class="py-3 px-4"><span class="${statusClass} px-2 py-1 rounded-full text-sm">${status}</span></td><td class="py-3 px-4"><span class="text-sm ${locationClass}">${locationStatus}</span></td><td class="py-3 px-4"><div class="flex space-x-2"><button onclick="viewAttendanceDetail('${record.id}')" class="text-blue-600 hover:text-blue-800" title="Lihat Detail"><i class="fas fa-eye"></i></button><button onclick="editAttendanceRecord('${record.id}')" class="text-purple-600 hover:text-purple-800" title="Edit"><i class="fas fa-edit"></i></button><button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-600 hover:text-red-800" title="Hapus"><i class="fas fa-trash"></i></button></div></td>`;
+
+            const clockIn = record.clockIn ? JSON.parse(record.clockIn) : null;
+            const clockOut = record.clockOut ? JSON.parse(record.clockOut) : null;
+
+            const timeIn = clockIn?.time ? new Date(clockIn.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+            const timeOut = clockOut?.time ? new Date(clockOut.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+            
+            let status = '';
+            let statusClass = '';
+            if (clockOut) {
+                status = 'Hadir';
+                statusClass = 'bg-green-100 text-green-800';
+            } else if (clockIn?.isLate) {
+                status = 'Terlambat';
+                statusClass = 'bg-yellow-100 text-yellow-800';
+            } else if (clockIn) {
+                status = 'Clock In';
+                statusClass = 'bg-blue-100 text-blue-800';
+            }
+
+            const locationStatus = (clockIn?.withinRadius && (!clockOut || clockOut?.withinRadius)) ? 'Dalam Radius' : 'Ada di Luar Radius';
+            const locationClass = (clockIn?.withinRadius && (!clockOut || clockOut?.withinRadius)) ? 'text-green-600' : 'text-yellow-600';
+            
+            row.innerHTML = `<td class="py-3 px-4"><div class="font-medium text-gray-800">${record.employeeName}</div><div class="text-sm text-gray-500">${record.employeePosition}</div></td><td class="py-3 px-4">${new Date(record.date).toLocaleDateString('id-ID')}</td><td class="py-3 px-4">${timeIn}</td><td class="py-3 px-4">${timeOut}</td><td class="py-3 px-4"><span class="${statusClass} px-2 py-1 rounded-full text-sm">${status}</span></td><td class="py-3 px-4"><span class="text-sm ${locationClass}">${locationStatus}</span></td><td class="py-3 px-4"><div class="flex space-x-2"><button onclick="viewAttendanceDetail('${record.id}')" class="text-blue-600 hover:text-blue-800" title="Lihat Detail"><i class="fas fa-eye"></i></button><button onclick="editAttendanceRecord('${record.id}')" class="text-purple-600 hover:text-purple-800" title="Edit"><i class="fas fa-edit"></i></button><button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-600 hover:text-red-800" title="Hapus"><i class="fas fa-trash"></i></button></div></td>`;
             return row;
         }
 
-        // Additional admin functions and handlers
         function applyAttendanceFilter() {
             const nameFilter = document.getElementById('attendanceNameFilter').value.toLowerCase();
             const periodFilter = document.getElementById('attendancePeriodFilter').value;
@@ -2457,7 +2135,7 @@
                 return;
             }
             const filterDate = new Date(dateFilter);
-            let filteredData = [...userAttendanceHistory];
+            let filteredData = [...attendanceData];
             if (nameFilter) {
                 filteredData = filteredData.filter(record => record.employeeName.toLowerCase().includes(nameFilter) || record.employeeEmail.toLowerCase().includes(nameFilter) || record.employeePosition.toLowerCase().includes(nameFilter));
             }
@@ -2483,7 +2161,7 @@
                 const sortedData = filteredData.sort((a, b) => new Date(b.date) - new Date(a.date));
                 sortedData.forEach(record => tbody.appendChild(createAttendanceRow(record)));
             }
-            updateFilterSummary(filteredData.length, userAttendanceHistory.length);
+            updateFilterSummary(filteredData.length, attendanceData.length);
         }
 
         function resetAttendanceFilter() {
@@ -2514,7 +2192,7 @@
         }
 
         function viewAttendanceDetail(attendanceId) {
-            const record = userAttendanceHistory.find(r => r.id === attendanceId);
+            const record = attendanceData.find(r => r.id == attendanceId);
             if (!record) return;
             showAttendanceDetail(record);
         }
@@ -2539,20 +2217,22 @@
             const modal = document.getElementById('attendanceDetailModal');
             const content = document.getElementById('attendanceDetailContent');
             let detailHTML = '';
-            if (data.clockIn) {
-                const clockInData = data.clockIn;
-                detailHTML += `<div class="bg-green-50 border border-green-200 rounded-xl p-6"><div class="flex items-center mb-4"><div class="bg-green-500 p-3 rounded-lg mr-4"><i class="fas fa-clock text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-green-800">Clock In</h3><p class="text-green-600">${new Date(clockInData.time).toLocaleString('id-ID')}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.employeeName || data.employeeName}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Email</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.employeeEmail || data.employeeEmail}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Divisi</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.division || data.employeeDivision}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.position || data.employeePosition}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Bertugas Sebagai</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.dutyAs || '-'}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Jenis Pekerjaan</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.workType || '-'}</p></div></div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Lokasi</label><p class="text-gray-900 bg-white p-3 rounded-lg border font-mono text-sm">${clockInData.location?.lat?.toFixed(6)}, ${clockInData.location?.lng?.toFixed(6)}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Status Radius</label><p class="p-3 rounded-lg border ${clockInData.withinRadius ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${clockInData.withinRadius ? 'Dalam Radius Kantor' : 'Di Luar Radius Kantor'}</p></div>${!clockInData.withinRadius ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan di Luar Radius</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.outsideReason}</p></div>` : ''}<div><label class="block text-sm font-medium text-gray-700 mb-1">Status Keterlambatan</label><p class="p-3 rounded-lg border ${clockInData.isLate ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">${clockInData.isLate ? 'Terlambat' : 'Tepat Waktu'}</p></div>${clockInData.isLate ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan Terlambat</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockInData.lateReason}</p></div>` : ''}<div><label class="block text-sm font-medium text-gray-700 mb-1">Foto Masuk</label><div class="bg-white p-3 rounded-lg border"><img src="${clockInData.photo}" alt="Foto Masuk" class="w-full max-w-xs rounded-lg"></div></div></div></div></div>`;
+            
+            const clockIn = data.clockIn ? JSON.parse(data.clockIn) : null;
+            const clockOut = data.clockOut ? JSON.parse(data.clockOut) : null;
+
+            if (clockIn) {
+                detailHTML += `<div class="bg-green-50 border border-green-200 rounded-xl p-6"><div class="flex items-center mb-4"><div class="bg-green-500 p-3 rounded-lg mr-4"><i class="fas fa-clock text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-green-800">Clock In</h3><p class="text-green-600">${new Date(clockIn.time).toLocaleString('id-ID')}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${data.employeeName}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Email</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${data.employeeEmail}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Divisi</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${data.employeeDivision}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${data.employeePosition}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Bertugas Sebagai</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockIn.dutyAs || '-'}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Jenis Pekerjaan</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockIn.workType || '-'}</p></div></div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Lokasi</label><p class="text-gray-900 bg-white p-3 rounded-lg border font-mono text-sm">${clockIn.location?.lat?.toFixed(6)}, ${clockIn.location?.lng?.toFixed(6)}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Status Radius</label><p class="p-3 rounded-lg border ${clockIn.withinRadius ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${clockIn.withinRadius ? 'Dalam Radius Kantor' : 'Di Luar Radius Kantor'}</p></div>${!clockIn.withinRadius ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan di Luar Radius</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockIn.outsideReason}</p></div>` : ''}<div><label class="block text-sm font-medium text-gray-700 mb-1">Status Keterlambatan</label><p class="p-3 rounded-lg border ${clockIn.isLate ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">${clockIn.isLate ? 'Terlambat' : 'Tepat Waktu'}</p></div>${clockIn.isLate ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan Terlambat</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockIn.lateReason}</p></div>` : ''}<div><label class="block text-sm font-medium text-gray-700 mb-1">Foto Masuk</label><div class="bg-white p-3 rounded-lg border"><img src="${clockIn.photo}" alt="Foto Masuk" class="w-full max-w-xs rounded-lg"></div></div></div></div></div>`;
             }
-            if (data.clockOut) {
-                const clockOutData = data.clockOut;
-                detailHTML += `<div class="bg-red-50 border border-red-200 rounded-xl p-6 mt-6"><div class="flex items-center mb-4"><div class="bg-red-500 p-3 rounded-lg mr-4"><i class="fas fa-clock text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-red-800">Clock Out</h3><p class="text-red-600">${new Date(clockOutData.time).toLocaleString('id-ID')}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Lokasi Pulang</label><p class="text-gray-900 bg-white p-3 rounded-lg border font-mono text-sm">${clockOutData.location?.lat?.toFixed(6)}, ${clockOutData.location?.lng?.toFixed(6)}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Status Radius</label><p class="p-3 rounded-lg border ${clockOutData.withinRadius ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${clockOutData.withinRadius ? 'Dalam Radius Kantor' : 'Di Luar Radius Kantor'}</p></div>${!clockOutData.withinRadius ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan di Luar Radius</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockOutData.outsideReason}</p></div>` : ''}</div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Laporan Pekerjaan</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockOutData.workReport}</p></div>${clockOutData.workPhoto ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Foto Pekerjaan</label><div class="bg-white p-3 rounded-lg border"><img src="${clockOutData.workPhoto}" alt="Foto Pekerjaan" class="w-full max-w-xs rounded-lg"></div></div>` : ''}</div></div></div>`;
+            if (clockOut) {
+                detailHTML += `<div class="bg-red-50 border border-red-200 rounded-xl p-6 mt-6"><div class="flex items-center mb-4"><div class="bg-red-500 p-3 rounded-lg mr-4"><i class="fas fa-clock text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-red-800">Clock Out</h3><p class="text-red-600">${new Date(clockOut.time).toLocaleString('id-ID')}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Lokasi Pulang</label><p class="text-gray-900 bg-white p-3 rounded-lg border font-mono text-sm">${clockOut.location?.lat?.toFixed(6)}, ${clockOut.location?.lng?.toFixed(6)}</p></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Status Radius</label><p class="p-3 rounded-lg border ${clockOut.withinRadius ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${clockOut.withinRadius ? 'Dalam Radius Kantor' : 'Di Luar Radius Kantor'}</p></div>${!clockOut.withinRadius ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Alasan di Luar Radius</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockOut.outsideReason}</p></div>` : ''}</div><div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Laporan Pekerjaan</label><p class="text-gray-900 bg-white p-3 rounded-lg border">${clockOut.workReport}</p></div>${clockOut.workPhoto ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">Foto Pekerjaan</label><div class="bg-white p-3 rounded-lg border"><img src="${clockOut.workPhoto}" alt="Foto Pekerjaan" class="w-full max-w-xs rounded-lg"></div></div>` : ''}</div></div></div>`;
             }
-            if (data.clockIn && data.clockOut) {
-                const workTimeMs = new Date(data.clockOut.time) - new Date(data.clockIn.time);
+            if (clockIn && clockOut) {
+                const workTimeMs = new Date(clockOut.time) - new Date(clockIn.time);
                 const workHours = Math.floor(workTimeMs / (1000 * 60 * 60));
                 const workMinutes = Math.floor((workTimeMs % (1000 * 60 * 60)) / (1000 * 60));
                 const workSeconds = Math.floor((workTimeMs % (1000 * 60)) / 1000);
-                detailHTML += `<div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mt-6"><div class="flex items-center mb-4"><div class="bg-blue-500 p-3 rounded-lg mr-4"><i class="fas fa-chart-line text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-blue-800">Ringkasan Kerja</h3><p class="text-blue-600">Total waktu kerja hari ini</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Total Waktu Kerja</p><p class="text-2xl font-bold text-blue-600">${workHours}j ${workMinutes}m ${workSeconds}d</p></div><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Status Masuk</p><p class="text-lg font-semibold ${data.clockIn.isLate ? 'text-yellow-600' : 'text-green-600'}">${data.clockIn.isLate ? 'Terlambat' : 'Tepat Waktu'}</p></div><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Lokasi</p><p class="text-lg font-semibold ${data.clockIn.withinRadius && data.clockOut.withinRadius ? 'text-green-600' : 'text-yellow-600'}">${data.clockIn.withinRadius && data.clockOut.withinRadius ? 'Dalam Radius' : 'Ada di Luar Radius'}</p></div></div></div>`;
+                detailHTML += `<div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mt-6"><div class="flex items-center mb-4"><div class="bg-blue-500 p-3 rounded-lg mr-4"><i class="fas fa-chart-line text-white text-xl"></i></div><div><h3 class="text-xl font-semibold text-blue-800">Ringkasan Kerja</h3><p class="text-blue-600">Total waktu kerja hari ini</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Total Waktu Kerja</p><p class="text-2xl font-bold text-blue-600">${workHours}j ${workMinutes}m ${workSeconds}d</p></div><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Status Masuk</p><p class="text-lg font-semibold ${clockIn.isLate ? 'text-yellow-600' : 'text-green-600'}">${clockIn.isLate ? 'Terlambat' : 'Tepat Waktu'}</p></div><div class="bg-white p-4 rounded-lg border text-center"><p class="text-sm text-gray-600 mb-1">Lokasi</p><p class="text-lg font-semibold ${clockIn.withinRadius && clockOut.withinRadius ? 'text-green-600' : 'text-yellow-600'}">${clockIn.withinRadius && clockOut.withinRadius ? 'Dalam Radius' : 'Ada di Luar Radius'}</p></div></div></div>`;
             }
             content.innerHTML = detailHTML;
             modal.classList.remove('hidden');
@@ -2594,7 +2274,7 @@
             const currentLogoIcon = document.getElementById('currentLogoIcon');
             if (previewTitle) previewTitle.textContent = appSettings.title || 'ECrew Absensi';
             if (previewSubtitle) previewSubtitle.textContent = appSettings.subtitle || 'Transwisata Employee System';
-            const logo = document.getElementById('logoPreview').src || appSettings.logo;
+            const logo = document.getElementById('logoPreview')?.src || appSettings.logo;
             if (logo && logo !== 'default') {
                 if (previewLogoImg) { previewLogoImg.src = logo; previewLogoImg.classList.remove('hidden'); }
                 if (previewLogoIcon) previewLogoIcon.classList.add('hidden');
@@ -2623,15 +2303,12 @@
 
         function resetBranding() {
             showModal('Konfirmasi', 'Apakah Anda yakin ingin mereset ke pengaturan default?', true, async () => {
-                try {
-                    await setDoc(brandingRef, { logo: 'default', title: 'ECrew Absensi', subtitle: 'Transwisata Employee System' });
+                const result = await postDataToSheet('branding', 'save', { title: 'ECrew Absensi', subtitle: 'Transwisata Employee System', logo: 'default' });
+                if (result.success) {
                     document.getElementById('logoUpload').value = '';
                     document.getElementById('logoPreview').classList.add('hidden');
                     updateBrandingPreview();
                     showModal('Berhasil!', 'Pengaturan branding berhasil direset ke default!');
-                } catch (e) {
-                    console.error("Error resetting branding:", e);
-                    showModal('Error', 'Gagal mereset pengaturan branding.');
                 }
             });
         }
@@ -2644,15 +2321,15 @@
 
         function updateAdminStats() {
             const today = new Date().toISOString().split('T')[0];
-            const presentToday = userAttendanceHistory.filter(record => record.date === today && record.clockIn).length;
-            const lateToday = userAttendanceHistory.filter(record => record.date === today && record.clockIn?.isLate).length;
+            const presentToday = attendanceData.filter(record => record.date === today && record.clockIn).length;
+            const lateToday = attendanceData.filter(record => record.date === today && JSON.parse(record.clockIn)?.isLate).length;
             document.getElementById('totalEmployees').textContent = allEmployees.length;
             document.getElementById('presentToday').textContent = presentToday;
             document.getElementById('lateToday').textContent = lateToday;
             document.getElementById('absentToday').textContent = allEmployees.length - presentToday;
         }
         function downloadAttendancePDF(period) {
-            const data = userAttendanceHistory;
+            const data = attendanceData;
             const periodFilter = period;
             const filterDate = new Date();
             const nameFilter = '';
@@ -2707,24 +2384,26 @@
             const tableData = [];
             const sortedData = data.sort((a, b) => new Date(b.date) - new Date(a.date));
             sortedData.forEach(record => {
-                const clockInTime = record.clockIn ? formatTime(record.clockIn.time) : '-';
-                const clockOutTime = record.clockOut ? formatTime(record.clockOut.time) : '-';
+                const clockIn = record.clockIn ? JSON.parse(record.clockIn) : null;
+                const clockOut = record.clockOut ? JSON.parse(record.clockOut) : null;
+                const clockInTime = clockIn?.time ? formatTime(clockIn.time) : '-';
+                const clockOutTime = clockOut?.time ? formatTime(clockOut.time) : '-';
                 let totalTime = '-';
-                if (record.clockIn && record.clockOut) {
-                    const workTimeMs = new Date(record.clockOut.time) - new Date(record.clockIn.time);
+                if (clockIn && clockOut) {
+                    const workTimeMs = new Date(clockOut.time) - new Date(clockIn.time);
                     const hours = Math.floor(workTimeMs / (1000 * 60 * 60));
                     const minutes = Math.floor((workTimeMs % (1000 * 60 * 60)) / (1000 * 60));
                     const seconds = Math.floor((workTimeMs % (1000 * 60)) / 1000);
                     totalTime = `${hours}j ${minutes}m ${seconds}d`;
                 }
-                let status = record.clockOut ? 'Hadir' : (record.clockIn && record.clockIn.isLate ? 'Terlambat' : 'Clock In');
-                const workReport = record.clockOut?.workReport ? record.clockOut.workReport.substring(0, 50) + (record.clockOut.workReport.length > 50 ? '...' : '') : '-';
+                let status = clockOut ? 'Hadir' : (clockIn?.isLate ? 'Terlambat' : 'Clock In');
+                const workReport = clockOut?.workReport ? clockOut.workReport.substring(0, 50) + (clockOut.workReport.length > 50 ? '...' : '') : '-';
                 tableData.push([
                     formatIndonesianDate(new Date(record.date)),
                     record.employeeDivision || '-',
                     record.employeePosition || '-',
-                    record.clockIn?.dutyAs || '-',
-                    record.clockIn?.workType || '-',
+                    clockIn?.dutyAs || '-',
+                    clockIn?.workType || '-',
                     status,
                     clockInTime,
                     clockOutTime,
