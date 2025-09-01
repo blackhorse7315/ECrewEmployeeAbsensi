@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECrew Absensi - Transwisata Prima Aviation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-shadow { box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Login Page -->
+    <div id="loginPage" class="min-h-screen gradient-bg flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl card-shadow p-8 w-full max-w-md animate-fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-plane text-white text-2xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">ECrew Absensi</h1>
+                <p class="text-gray-600 text-sm">Transwisata Prima Aviation</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
+                    <input type="text" id="employeeId" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Masukkan Employee ID">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" id="password" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Masukkan Password">
+                </div>
+                
+                <button type="submit" id="loginBtn" 
+                        class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-200 font-medium">
+                    <span id="loginText">Masuk</span>
+                    <div id="loginLoading" class="loading hidden"></div>
+                </button>
+            </form>
+            
+            <div class="mt-6 text-center">
+                <p class="text-xs text-gray-500">Demo Login:</p>
+                <p class="text-xs text-gray-600">User: EMP001 / password123</p>
+                <p class="text-xs text-gray-600">Admin: ADMIN001 / admin123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Dashboard -->
+    <div id="userDashboard" class="hidden min-h-screen bg-gray-50">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <div class="bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-plane text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-semibold text-gray-900">ECrew Absensi</h1>
+                            <p class="text-xs text-gray-500">Selamat datang, <span id="currentUser"></span></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-right">
+                            <div id="currentTime" class="text-sm font-medium text-gray-900"></div>
+                            <div id="currentDate" class="text-xs text-gray-500"></div>
+                        </div>
+                        <button onclick="logout()" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Absensi Hari Ini</h3>
+                    <div id="todayStatus" class="mb-4 text-gray-600">
+                        Belum melakukan absensi hari ini
+                    </div>
+                    <div class="flex space-x-3">
+                        <button id="clockInBtn" onclick="clockIn()" 
+                                class="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition duration-200">
+                            <i class="fas fa-clock mr-2"></i>Clock In
+                        </button>
+                        <button id="clockOutBtn" onclick="clockOut()" disabled
+                                class="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 disabled:bg-gray-400">
+                            <i class="fas fa-clock mr-2"></i>Clock Out
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Status Kehadiran</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Bulan ini:</span>
+                            <span class="font-medium text-blue-600" id="monthlyAttendance">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Keterlambatan:</span>
+                            <span class="font-medium text-yellow-600" id="lateCount">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Total Jam:</span>
+                            <span class="font-medium text-green-600" id="totalHours">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="bg-white rounded-xl card-shadow">
+                <div class="border-b border-gray-200">
+                    <nav class="flex space-x-8 px-6">
+                        <button onclick="showTab('history')" id="historyTabBtn" 
+                                class="py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                            Riwayat Absensi
+                        </button>
+                        <button onclick="showTab('news')" id="newsTabBtn"
+                                class="py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                            Pengumuman
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- History Tab -->
+                <div id="historyTab" class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="border-b border-gray-200">
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700">Tanggal</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700">Clock In</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700">Clock Out</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700">Total Jam</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr>
+                                    <td colspan="5" class="text-center py-8 text-gray-500">
+                                        <div class="loading mx-auto mb-2"></div>
+                                        Memuat data...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- News Tab -->
+                <div id="newsTab" class="hidden">
+                    <div class="p-6">
+                        <div class="loading mx-auto mb-2"></div>
+                        <p class="text-center text-gray-500">Memuat pengumuman...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="hidden min-h-screen bg-gray-50">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <div class="bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-user-shield text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-semibold text-gray-900">Admin Dashboard</h1>
+                            <p class="text-xs text-gray-500">ECrew Absensi Management</p>
+                        </div>
+                    </div>
+                    <button onclick="logout()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <div class="flex items-center">
+                        <div class="bg-blue-100 p-3 rounded-full">
+                            <i class="fas fa-users text-blue-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm text-gray-600">Total Karyawan</p>
+                            <p class="text-2xl font-bold text-gray-800" id="totalEmployees">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <div class="flex items-center">
+                        <div class="bg-green-100 p-3 rounded-full">
+                            <i class="fas fa-check text-green-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm text-gray-600">Hadir Hari Ini</p>
+                            <p class="text-2xl font-bold text-gray-800" id="presentToday">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <div class="flex items-center">
+                        <div class="bg-yellow-100 p-3 rounded-full">
+                            <i class="fas fa-clock text-yellow-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm text-gray-600">Terlambat</p>
+                            <p class="text-2xl font-bold text-gray-800" id="lateToday">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <div class="flex items-center">
+                        <div class="bg-red-100 p-3 rounded-full">
+                            <i class="fas fa-times text-red-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm text-gray-600">Tidak Hadir</p>
+                            <p class="text-2xl font-bold text-gray-800" id="absentToday">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Table -->
+            <div class="bg-white rounded-xl card-shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800">Absensi Hari Ini</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Employee ID</th>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Nama</th>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Departemen</th>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Clock In</th>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Clock Out</th>
+                                <th class="text-left py-4 px-6 font-medium text-gray-700">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center py-8 text-gray-500">
+                                    <div class="loading mx-auto mb-2"></div>
+                                    Memuat data absensi...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Google Sheets Integration
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK5FIJRzTGCpQdpvjnJFYwICTawdaOrC5Wq28d3X7dCpQ9hO2G9HE2vEPH5ih28jcAUQ/exec';
+        const SPREADSHEET_ID = '1amYY34QJoF50Bd8dHZ3DrKz3IzuOVNAB33iHJt3OCIc';
+
+        let currentUser = null;
+        let isLoggedIn = false;
+
+        // API Functions
+        async function apiCall(action, data = {}) {
+            try {
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ action, ...data })
+                });
+                
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('API Error:', error);
+                return { success: false, message: 'Network error: ' + error.message };
+            }
+        }
+
+        // Login function
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const employeeId = document.getElementById('employeeId').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginText = document.getElementById('loginText');
+            const loginLoading = document.getElementById('loginLoading');
+            
+            // Show loading
+            loginBtn.disabled = true;
+            loginText.classList.add('hidden');
+            loginLoading.classList.remove('hidden');
+            
+            try {
+                const result = await apiCall('login', { employeeId, password });
+                
+                if (result.success) {
+                    currentUser = result.data;
+                    if (currentUser.role === 'admin') {
+                        showAdminDashboard();
+                    } else {
+                        showUserDashboard();
+                    }
+                } else {
+                    alert(result.message || 'Login gagal!');
+                }
+            } catch (error) {
+                alert('Terjadi kesalahan saat login: ' + error.message);
+            } finally {
+                // Hide loading
+                loginBtn.disabled = false;
+                loginText.classList.remove('hidden');
+                loginLoading.classList.add('hidden');
+            }
+        });
+
+        // Clock In function
+        async function clockIn() {
+            const result = await apiCall('clockIn', { employeeId: currentUser.employee_id });
+            
+            if (result.success) {
+                document.getElementById('clockInBtn').disabled = true;
+                document.getElementById('clockOutBtn').disabled = false;
+                document.getElementById('todayStatus').innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Clock In:</span>
+                        <span class="font-medium text-green-600">${result.data.time}</span>
+                    </div>
+                `;
+                alert(`Clock In berhasil pada ${result.data.time}`);
+                loadAttendanceHistory();
+            } else {
+                alert(result.message || 'Clock In gagal!');
+            }
+        }
+
+        // Clock Out function
+        async function clockOut() {
+            const result = await apiCall('clockOut', { employeeId: currentUser.employee_id });
+            
+            if (result.success) {
+                document.getElementById('clockOutBtn').disabled = true;
+                const clockInTime = document.querySelector('#todayStatus .text-green-600').textContent;
+                document.getElementById('todayStatus').innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Clock In:</span>
+                            <span class="font-medium text-green-600">${clockInTime}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Clock Out:</span>
+                            <span class="font-medium text-red-600">${result.data.time}</span>
+                        </div>
+                    </div>
+                `;
+                alert(`Clock Out berhasil pada ${result.data.time}`);
+                loadAttendanceHistory();
+            } else {
+                alert(result.message || 'Clock Out gagal!');
+            }
+        }
+
+        // Load attendance history
+        async function loadAttendanceHistory() {
+            const result = await apiCall('getAttendance', { employeeId: currentUser.employee_id });
+            
+            if (result.success) {
+                const tbody = document.getElementById('historyTableBody');
+                tbody.innerHTML = '';
+                
+                if (result.data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-gray-500">
+                                Belum ada data absensi
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                result.data.slice(-10).reverse().forEach(record => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-100';
+                    
+                    const totalHours = calculateWorkHours(record.clockIn, record.clockOut);
+                    const statusClass = getStatusClass(record.status);
+                    
+                    row.innerHTML = `
+                        <td class="py-3 px-4">${formatDate(record.date)}</td>
+                        <td class="py-3 px-4">${record.clockIn || '-'}</td>
+                        <td class="py-3 px-4">${record.clockOut || '-'}</td>
+                        <td class="py-3 px-4">${totalHours}</td>
+                        <td class="py-3 px-4"><span class="${statusClass}">${record.status}</span></td>
+                    `;
+                    
+                    tbody.appendChild(row);
+                });
+
+                // Update monthly stats
+                updateMonthlyStats(result.data);
+            }
+        }
+
+        // Load news
+        async function loadNews() {
+            try {
+                const response = await fetch(`${APPS_SCRIPT_URL}?action=getNews`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const newsContainer = document.getElementById('newsTab');
+                    const newsHTML = result.data.map(news => `
+                        <article class="border-l-4 border-blue-600 pl-4 mb-6">
+                            <h3 class="font-semibold text-gray-800 mb-2">${news.title}</h3>
+                            <p class="text-gray-600 text-sm mb-2">${news.content}</p>
+                            <span class="text-xs text-gray-500">${news.date}</span>
+                        </article>
+                    `).join('');
+                    
+                    newsContainer.innerHTML = `<div class="p-6">${newsHTML}</div>`;
+                }
+            } catch (error) {
+                console.error('Error loading news:', error);
+                document.getElementById('newsTab').innerHTML = `
+                    <div class="p-6 text-center text-gray-500">
+                        Gagal memuat pengumuman
+                    </div>
+                `;
+            }
+        }
+
+        // Load all attendance for admin
+        async function loadAllAttendance() {
+            const result = await apiCall('getAllAttendance');
+            
+            if (result.success) {
+                const tbody = document.querySelector('#adminDashboard tbody');
+                tbody.innerHTML = '';
+                
+                const today = new Date().toDateString();
+                const todayAttendance = result.data.filter(record => record.date === today);
+                
+                if (todayAttendance.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-gray-500">
+                                Belum ada data absensi hari ini
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    todayAttendance.forEach(record => {
+                        const row = document.createElement('tr');
+                        row.className = 'border-b border-gray-100';
+                        
+                        const statusClass = getStatusClass(record.status);
+                        
+                        row.innerHTML = `
+                            <td class="py-4 px-6">${record.employeeId}</td>
+                            <td class="py-4 px-6">${record.name}</td>
+                            <td class="py-4 px-6">${record.department}</td>
+                            <td class="py-4 px-6">${record.clockIn || '-'}</td>
+                            <td class="py-4 px-6">${record.clockOut || '-'}</td>
+                            <td class="py-4 px-6"><span class="${statusClass}">${record.status}</span></td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                    });
+                }
+                
+                updateAdminStats(result.data);
+            }
+        }
+
+        // Helper functions
+        function calculateWorkHours(clockIn, clockOut) {
+            if (!clockIn || !clockOut) return '-';
+            
+            const [inHour, inMin] = clockIn.split(':').map(Number);
+            const [outHour, outMin] = clockOut.split(':').map(Number);
+            
+            const inMinutes = inHour * 60 + inMin;
+            const outMinutes = outHour * 60 + outMin;
+            
+            const diffMinutes = outMinutes - inMinutes;
+            const hours = Math.floor(diffMinutes / 60);
+            const minutes = diffMinutes % 60;
+            
+            return `${hours}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        function getStatusClass(status) {
+            switch(status) {
+                case 'Hadir':
+                    return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs';
+                case 'Terlambat':
+                    return 'bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs';
+                default:
+                    return 'bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs';
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric' 
+            });
+        }
+
+        function updateMonthlyStats(attendanceData) {
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            
+            const monthlyData = attendanceData.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+            });
+
+            const totalDays = monthlyData.length;
+            const lateDays = monthlyData.filter(record => record.status === 'Terlambat').length;
+            const totalMinutes = monthlyData.reduce((total, record) => {
+                if (record.clockIn && record.clockOut) {
+                    const [inHour, inMin] = record.clockIn.split(':').map(Number);
+                    const [outHour, outMin] = record.clockOut.split(':').map(Number);
+                    const workMinutes = (outHour * 60 + outMin) - (inHour * 60 + inMin);
+                    return total + workMinutes;
+                }
+                return total;
+            }, 0);
+
+            const totalHours = Math.floor(totalMinutes / 60);
+
+            document.getElementById('monthlyAttendance').textContent = `${totalDays} hari`;
+            document.getElementById('lateCount').textContent = `${lateDays} kali`;
+            document.getElementById('totalHours').textContent = `${totalHours} jam`;
+        }
+
+        function updateAdminStats(allData) {
+            const today = new Date().toDateString();
+            const todayData = allData.filter(record => record.date === today);
+            
+            const totalEmployees = new Set(allData.map(record => record.employeeId)).size;
+            const presentToday = todayData.filter(record => record.clockIn).length;
+            const lateToday = todayData.filter(record => record.status === 'Terlambat').length;
+            const absentToday = Math.max(0, totalEmployees - presentToday);
+            
+            document.getElementById('totalEmployees').textContent = totalEmployees;
+            document.getElementById('presentToday').textContent = presentToday;
+            document.getElementById('lateToday').textContent = lateToday;
+            document.getElementById('absentToday').textContent = absentToday;
+        }
+
+        // Dashboard functions
+        function showUserDashboard() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('userDashboard').classList.remove('hidden');
+            document.getElementById('currentUser').textContent = currentUser.name;
+            isLoggedIn = true;
+            updateTime();
+            setInterval(updateTime, 1000);
+            loadAttendanceHistory();
+            loadNews();
+            checkTodayAttendance();
+        }
+
+        function showAdminDashboard() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            isLoggedIn = true;
+            loadAllAttendance();
+        }
+
+        async function checkTodayAttendance() {
+            const result = await apiCall('getAttendance', { employeeId: currentUser.employee_id });
+            
+            if (result.success) {
+                const today = new Date().toDateString();
+                const todayRecord = result.data.find(record => record.date === today);
+                
+                if (todayRecord) {
+                    if (todayRecord.clockIn && !todayRecord.clockOut) {
+                        document.getElementById('clockInBtn').disabled = true;
+                        document.getElementById('clockOutBtn').disabled = false;
+                        document.getElementById('todayStatus').innerHTML = `
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Clock In:</span>
+                                <span class="font-medium text-green-600">${todayRecord.clockIn}</span>
+                            </div>
+                        `;
+                    } else if (todayRecord.clockIn && todayRecord.clockOut) {
+                        document.getElementById('clockInBtn').disabled = true;
+                        document.getElementById('clockOutBtn').disabled = true;
+                        document.getElementById('todayStatus').innerHTML = `
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Clock In:</span>
+                                    <span class="font-medium text-green-600">${todayRecord.clockIn}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Clock Out:</span>
+                                    <span class="font-medium text-red-600">${todayRecord.clockOut}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        }
+
+        // Tab functions
+        function showTab(tabName) {
+            // Hide all tabs
+            document.getElementById('historyTab').classList.add('hidden');
+            document.getElementById('newsTab').classList.add('hidden');
+            
+            // Reset tab buttons
+            document.getElementById('historyTabBtn').className = 'py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700';
+            document.getElementById('newsTabBtn').className = 'py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700';
+            
+            // Show selected tab
+            if (tabName === 'history') {
+                document.getElementById('historyTab').classList.remove('hidden');
+                document.getElementById('historyTabBtn').className = 'py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600';
+            } else if (tabName === 'news') {
+                document.getElementById('newsTab').classList.remove('hidden');
+                document.getElementById('newsTabBtn').className = 'py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600';
+            }
+        }
+
+        // Utility functions
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            const dateString = now.toLocaleDateString('id-ID', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            document.getElementById('currentTime').textContent = timeString;
+            document.getElementById('currentDate').textContent = dateString;
+        }
+
+        function logout() {
+            currentUser = null;
+            isLoggedIn = false;
+            document.getElementById('userDashboard').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('loginForm').reset();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set initial tab
+            showTab('history');
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9781561d6629fe00',t:'MTc1NjY5MzcyOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
